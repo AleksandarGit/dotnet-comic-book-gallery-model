@@ -13,6 +13,7 @@ variables:
   solution: '**/*.sln'
   buildPlatform: 'Any CPU'
   buildConfiguration: 'Release'
+  build.ArtifactStagingDirectory: ''
 
 steps:
 - task: NuGetToolInstaller@1
@@ -31,4 +32,26 @@ steps:
 - task: VSTest@2
   inputs:
     platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+    configuration: '$(buildConfiguration) --collect "Code coverage"'
+
+- script: dotnet test <test-project> --logger trx --collect "Code coverage"
+- task: PublishTestResults@2
+  inputs:
+    testRunner: VSTest
+    testResultsFiles: '**/*.trx'
+
+# ...
+# do this after you've built your app, near the end of your pipeline in most cases
+# for example, you do this before you deploy to an Azure web app on Windows
+- task: DotNetCoreCLI@2
+  inputs:
+    command: publish
+    publishWebProjects: True
+    arguments: '--configuration $(buildConfiguration) --output $(build.ArtifactStagingDirectory)'
+    zipAfterPublish: True
+- task: AzureWebApp@1
+  inputs:
+    azureSubscription: '<Azure service connection>'
+    appType: webApp
+    appName: '<Name of web app>'
+    package: $(build.ArtifactStagingDirectory)/**/*.zip   
